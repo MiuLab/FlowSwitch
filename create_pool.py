@@ -20,7 +20,7 @@ def create_pools():
     workflow_flowchart_pool = {}
     workflow_summary_pool = {}
 
-    with jsonlines.open("workflow_final.jsonl") as reader:
+    with jsonlines.open("./data/workflow_final.jsonl") as reader:
         for obj in reader:
             uuid = obj["uuid"]
             scenario, domain, role = (

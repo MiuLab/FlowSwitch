@@ -215,7 +215,7 @@ def summarize_role(role):
     """
     scenario_names = get_scenarios_by_role(role)
     scenarios = []
-    with jsonlines.open("workflow_final.jsonl", "r") as f:
+    with jsonlines.open("./data/workflow_final.jsonl", "r") as f:
         for line in f:
             if line["scenario"] in scenario_names:
                 scenarios.append(line["workflow"]["summary"])
