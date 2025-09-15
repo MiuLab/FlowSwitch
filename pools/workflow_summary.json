@@ -1,0 +1,308 @@
+{
+    "accc3823-7800-49bb-91b1-1189946dcb0b": {
+        "domain": "Customer Service",
+        "role": "apartment_manager",
+        "scenario_name": "Search for apartments",
+        "workflow": "Users search for apartments by criteria (bedrooms, price, floor, elevator). If no matches are found they can modify their search or end the process; if matches exist they can view details, request other options (restarting the search), view the unit before deciding, or attempt to rent immediately. Successful rental proceeds; failed rental returns an explanation (e.g., unpaid deposit). Viewing requests are confirmed and introduce a wait before the next steps."
+    },
+    "a33a0c30-08a6-4aca-9b53-30c2a86bbb87": {
+        "domain": "Customer Service",
+        "role": "apartment_manager",
+        "scenario_name": "Make an appointment to view a home",
+        "workflow": "When someone wants to view an apartment the process either starts with searching for listings or, if they already have a preferred unit, verifying its details via getRoomInfo. If the room number or parameters are missing, the search restarts. Once the room is confirmed, available viewing slots are checked with fixTime; if none are available the user can reschedule, view a different apartment, or wait. When a suitable time is found the user provides their viewing time and phone number and is instructed to arrive at the community gate on time, where a salesman will meet them. The workflow ensures apartment details are validated and a viewing is scheduled for prospective renters."
+    },
+    "daa55e31-92ff-409f-8222-847fe8db90ac": {
+        "domain": "Customer Service",
+        "role": "apartment_manager",
+        "scenario_name": "Apartment fee payment",
+        "workflow": "The workflow verifies a user\u2019s identity by phone number to confirm residency, informs them of their apartment fee, offers options to pay now or later, handles payment attempts (including reminders for incomplete payments), and concludes by advising prompt payment and saying farewell."
+    },
+    "68cc0227-0585-4b7b-9982-cfb360cf97f3": {
+        "domain": "Customer Service",
+        "role": "apartment_manager",
+        "scenario_name": "Apartment fee bill inquiry",
+        "workflow": "This workflow handles apartment fee inquiries by first confirming the user\u2019s identity via phone number. If identity is verified, it attempts to retrieve billing information for a specified date and either presents the details or offers the option to try another date. If identity cannot be confirmed, the user is asked whether to provide a different phone number; if they decline or billing remains unavailable, the inquiry is terminated with a failure notification."
+    },
+    "b7bb32bf-0d2b-4428-8234-b8c61a266740": {
+        "domain": "Logistics Solutions",
+        "role": "moving_service",
+        "scenario_name": "Moving Service Appointment",
+        "workflow": "The workflow guides booking a moving service by first checking whether the move is within the same city. If it is, move details are collected and a fee is calculated; the customer can accept or decline the fee. If accepted, the customer selects a preferred time, which is either confirmed if feasible or the customer is asked to choose another time. If the move is not within the same city, the customer is informed that only same-city moves are offered and is asked whether they will modify their request; declining to change or declining the fee ends the process. The flow finishes with either a scheduled move or a notification that the request cannot be met."
+    },
+    "9bf56f1e-d44b-4728-84f1-0e61209b2a89": {
+        "domain": "Logistics Solutions",
+        "role": "moving_service",
+        "scenario_name": "Insurance claim",
+        "workflow": "The workflow starts by collecting details about the damaged or lost property and calling an API to verify whether the policy is still active. If the insurance is expired, the user is told they are not eligible for compensation. If the policy is active, the system checks whether the item is covered; non-covered items are rejected. For covered items an audit API determines eligibility for payout: a passing audit leads to notification of the compensation amount and delivery in three days; a failing audit prompts the user to choose whether to readjust the claim, which, if chosen, restarts the process, otherwise the user is apologized to."
+    },
+    "303519f3-9d93-4a47-b23e-e31ed7153757": {
+        "domain": "Customer Service",
+        "role": "gas_equipment_service",
+        "scenario_name": "Gas repairs",
+        "workflow": "The workflow decides whether gas maintenance is inside or outside the homeowner\u2019s meter area to assign responsibility. If it\u2019s inside the meter area, the homeowner is responsible and may self-maintain, hire a third party, or request the company (which can schedule via ContactMaster); third-party work is followed by a company inspection after seven days (or a scheduled check if the homeowner is unavailable). If it\u2019s outside (including the meter area), the company is responsible and dispatches a technician. The process clarifies responsibility and scheduling options."
+    },
+    "71395c1c-1e1a-46d9-90be-08424c7dfe76": {
+        "domain": "Customer Service",
+        "role": "gas_equipment_service",
+        "scenario_name": "Gas fee inquiry and payment",
+        "workflow": "The workflow manages gas service requests through two main paths: checking gas fees and handling bill payments. For fee inquiries it retrieves the user\u2019s balance, offers a detailed expense list if requested, and finishes with a thank-you when no further detail is needed. For payments it generates a payment link, verifies whether payment has been made, and either confirms balance updates or prompts the user to complete payment within a short window. If any lookup or link generation fails (for example due to incorrect user information), the user is asked to re-enter their details."
+    },
+    "334e3f27-1c0f-4d66-8869-acb64a86439c": {
+        "domain": "Customer Service",
+        "role": "gas_equipment_service",
+        "scenario_name": "Feedback on Gas Service Interruption",
+        "workflow": "The workflow begins when a user reports a gas outage and the system verifies their account by calling the 'lookMeter' function. If verification fails, the user is asked to re-enter their information. If successful, the system checks the account balance: an insufficient balance prompts a payment request, while a sufficient balance leads to checking for service announcements. If there is an announcement, the user is informed and advised to use non-gas-dependent equipment temporarily; if not, the system checks gas availability in the area and either suggests a possible appliance fault (if gas is available) or advises contacting property management due to likely external causes such as maintenance or a broken main meter."
+    },
+    "d2fe7ddc-c35f-4d5c-a2cc-a4a2c6496049": {
+        "domain": "Robotic Process Automation",
+        "role": "workstation_applicant",
+        "scenario_name": "Replacement of workstations",
+        "workflow": "When a workstation change is requested, the system first verifies the user\u2019s identity. If the identity is invalid the request is rejected; if valid, the system checks whether a workstation is already defined. For a defined workstation it verifies the station and, if verification succeeds, submits an application and notifies the user of success (change takes effect next day) or failure. If the workstation is undefined or verification fails, the system offers recommended options or asks the user to reselect; the user may cancel (ending the process) or continue, in which case the process returns to verification."
+    },
+    "079403cb-e17b-4d96-bbf9-60c7a5582235": {
+        "domain": "Robotic Process Automation",
+        "role": "workstation_applicant",
+        "scenario_name": "Request the user to change the workstation",
+        "workflow": "The workflow manages a user request to change workstations: it first verifies the user\u2019s identity (getUserInfo) and rejects the request if verification fails. If identity is confirmed, the system checks the application outcome (obtainApplicationResults). Approved applications prompt the user to confirm whether to proceed; if they agree, they receive a deadline reminder (deskChange), and if they decline their reason is recorded (no_change_reason). Rejected applications notify the user of the failure and reason and invite them to reapply. API calls are used for identity and application status retrieval."
+    },
+    "2a3d66de-3a03-428b-ae61-8c5ef7ee6f22": {
+        "domain": "Logistics Solutions",
+        "role": "food_delivery_service",
+        "scenario_name": "Online surveys",
+        "workflow": "Call begins by confirming the recipient\u2019s identity; if it\u2019s the intended customer (Mr. Wang Zhenyan) the caller asks for permission to conduct a satisfaction survey. If the customer agrees, the caller records satisfaction feedback and responds with thanks if positive or an apology and promise to improve if negative. If the customer declines the survey, the caller asks for a more convenient callback time and schedules it if provided; otherwise the caller apologizes and ends the call. If the person reached is not the intended customer, the caller apologizes for the wrong number and ends the call."
+    },
+    "fb31b7e3-1303-45d7-8359-cba9208cb2eb": {
+        "domain": "Logistics Solutions",
+        "role": "food_delivery_service",
+        "scenario_name": "Get Food Voucher",
+        "workflow": "Caller verifies the callee is Mr. Wang; if not, the call ends. If he is, the caller presents a 6% off promotion and checks his availability during the promotion window. If unavailable, the caller offers the promotion dates and ends if he still cannot attend. If available, the caller asks about an appointment: no appointment means queuing on arrival; postpone appointment prompts the callee to call later by a deadline; making the appointment now requires collecting ID and name and calling a reservation API, confirming on success or retrying collection on failure. The flow ensures correct identity, confirms availability, and provides an appointment option to avoid queuing."
+    },
+    "a30c11b7-ec42-4020-aa11-87ce92f50518": {
+        "domain": "Personal Assistant",
+        "role": "meeting_arrangement",
+        "scenario_name": "Launch the meeting",
+        "workflow": "This workflow manages meeting scheduling by attempting to set up a meeting via a scheduleMeeting function, notifying the user and sending a text when successful. It then asks whether the user needs a meeting link and whether they want a reminder\u2014if a reminder is requested it collects a contact time and confirms advance notification; if not, it prompts the user to join on time. If the meeting cannot be scheduled it explains the reason and offers options to adjust details or force-start the meeting, which retries scheduling."
+    },
+    "23e2583a-74c5-4caa-8137-6d0dca3506fe": {
+        "domain": "Personal Assistant",
+        "role": "meeting_arrangement",
+        "scenario_name": "Cancel meeting",
+        "workflow": "This flowchart outlines the steps to cancel a DingTalk meeting: first check whether the meeting has already started. If it hasn\u2019t, guide the user to cancel from the DingTalk home page. If it has started, determine whether cancellation is possible; if not, diagnose whether the problem is due to the mobile app (suggest using a computer) or network issues (suggest checking or switching networks). If cancellation is possible, request confirmation (noting cancellation is irreversible); if the user confirms, verify whether they are the meeting host\u2014hosts can cancel directly, non-hosts should consult the host. The process emphasizes appropriate authorization, user awareness of consequences, and basic troubleshooting for technical barriers."
+    },
+    "118f7450-5f7a-499b-82f3-c05f25d3a42b": {
+        "domain": "Travel&Transportation",
+        "role": "flight_inquiry",
+        "scenario_name": "Check flights",
+        "workflow": "The workflow prompts the user for a departure city and date, then searches for available flights. If no flights are found, the user is informed and asked to try again; this repeats until flights are found or the user opts to stop. When flights are found, a list is shown and the user is asked about preferences. If they choose a specific flight, they provide its ID and receive the price. If they don\u2019t prefer any listed flights, they can choose to continue searching or end the session. The process ends with a goodbye and an invitation to inquire again later."
+    },
+    "a7bb4821-c848-4593-a520-694190df31a0": {
+        "domain": "Travel&Transportation",
+        "role": "flight_inquiry",
+        "scenario_name": "Book a flight",
+        "workflow": "The workflow guides a user through booking a flight: it asks for a Flight ID, checks availability, and if available collects the user\u2019s ID and name to attempt a reservation. The system informs the user of success or failure (providing booking details on success), and after any outcome asks whether the user wants to book again; if so the process repeats, otherwise it closes with an invitation to return later."
+    },
+    "682b15cd-fb08-4ec6-b8be-3620033aa040": {
+        "domain": "Logistics Solutions",
+        "role": "express_support",
+        "scenario_name": "Express shipping",
+        "workflow": "The workflow collects sender and recipient contact details to determine if a courier shipment can proceed. If information is invalid the user can correct it or cancel; if valid the user must confirm (no post-confirmation changes), receive a tracking number, and choose whether to continue. At any prompt the user can loop back to update details or end the process with a farewell."
+    },
+    "7795cb1c-ed92-476b-9a18-9701645e5da9": {
+        "domain": "Logistics Solutions",
+        "role": "express_support",
+        "scenario_name": "Query express information",
+        "workflow": "A customer-service workflow for express delivery inquiries: the agent asks for an order number to look up shipment details and prompts re-entry if not found. Once located, the system reports delivery status; for undelivered items the user can request a shipment push or check the current location, while for delivered items the user is asked whether they have received it and, if not, is directed to check a nearby Cainiao Station. If the delivery is received, the user\u2019s satisfaction is queried and responded to with either thanks for positive feedback or assurance of improvement. The flow focuses on efficient tracking and resolving delivery issues to improve customer satisfaction."
+    },
+    "0b866d96-bf17-45c4-ae4e-dbc2b1f5898b": {
+        "domain": "E-tailing Recommandation",
+        "role": "computer_store_sales",
+        "scenario_name": "Notebook purchase",
+        "workflow": "Guide a buyer through choosing a notebook by first asking about a preferred brand (Honor, Xiaomi, Asus) or offering a brief overview of these brands\u2019 strengths if no preference. Recommend a specific model, allow alternative brand suggestions until the buyer is satisfied, then collect preferred specs (screen size, color, memory) and provide the price. If the buyer decides to purchase, direct them to complete payment via a shared link; if not, encourage them to consider the options."
+    },
+    "05623f8a-c038-436f-8a15-7912f0d84651": {
+        "domain": "E-tailing Recommandation",
+        "role": "computer_store_sales",
+        "scenario_name": "Laptop Returns",
+        "workflow": "The workflow handles laptop returns by first asking whether the issue is a quality problem or a change of mind within seven days. For quality issues, it runs a troubleshooting flow (collect model and problem, provide solutions, check resolution), escalates to a technician if needed, and evaluates return eligibility if problems persist. For seven-day returns without defects, it verifies that the laptop is properly packed before processing; if packaging or return conditions fail, the user is informed that a return is not possible, otherwise the laptop is brought to the store for inspection and return."
+    },
+    "6f586cef-ec6f-4b7b-a005-30f535f48283": {
+        "domain": "Robotic Process Automation",
+        "role": "mail_administration",
+        "scenario_name": "Send mail",
+        "workflow": "This workflow guides a user through sending an email: it first checks whether the user has an email account (prompting for ID and address) and, if not, directs them to register. For account holders, it validates the recipient\u2019s address; if invalid, the user can retry with a different address or cancel. Once a valid recipient is provided, the user chooses to send immediately or schedule/send later, with an option to save the message as a draft before ending the process."
+    },
+    "7b1fb560-7939-4bb1-8039-0f037fd5de4a": {
+        "domain": "Robotic Process Automation",
+        "role": "mail_administration",
+        "scenario_name": "Reply to an email",
+        "workflow": "A guided flow that verifies whether the user has an email account, searches for a specified message if the account exists, and handles cases where the account or email is not found. If the email is located, the user can choose to reply immediately (the system helps send the reply) or defer and contact support later. Overall, it walks the user through account verification, email lookup, and reply decision steps."
+    },
+    "c311d9c6-7a0e-4569-ba54-bf1d273f10dd": {
+        "domain": "Personal Assistant",
+        "role": "financial_assistant",
+        "scenario_name": "Currency exchange",
+        "workflow": "The workflow lets a user choose between viewing current exchange rates (acquisitionRate) or performing a currency exchange (exchangeMoney). If the exchange succeeds the user is told to check their account; if it fails the system identifies whether the cause is no remaining annual exchanges, exceeding the foreign-exchange limit, or insufficient balance and advises the user to visit the People's Bank counter, apply for exception/limit increase, or check their balance accordingly."
+    },
+    "f40d5a18-9483-49d1-8d1e-539223773893": {
+        "domain": "Personal Assistant",
+        "role": "financial_assistant",
+        "scenario_name": "Appointments for large withdrawals",
+        "workflow": "The workflow guides users through scheduling and completing cash withdrawals. Amounts up to 20,000 RMB can be withdrawn at ATMs without an appointment (subject to ATM transaction and daily limits); amounts above 20,000 RMB require an appointment and identity verification. Users are shown how to locate ATMs, confirm reservation and withdrawal details, and are reminded to bring their bank card and ID on the reserved day. If a reservation fails, users are notified of the reason and advised to check their account balance or visit a bank outlet for assistance."
+    },
+    "e27d36bc-1b76-464f-bbed-c5dbc39dda07": {
+        "domain": "Personal Assistant",
+        "role": "financial_assistant",
+        "scenario_name": "Check the balance and transfer the bank card account",
+        "workflow": "The workflow starts by verifying a user\u2019s bank account using their ID and card number. If the account is found, the system shows the balance, offers to answer questions (including displaying the last five transactions if requested), and then asks if the user needs other services. If no account is found, the user is prompted to re-enter information or end the session. Additional services include applying for a new bank card via an online application (with validation, retry on failure, and mailing the card on success) or transferring/ managing the card account via the bank\u2019s mobile app security center (e.g., password change)."
+    },
+    "095a5a47-659f-4725-a029-83883f642982": {
+        "domain": "Personal Assistant",
+        "role": "medical_consultant",
+        "scenario_name": "Make an appointment with a doctor",
+        "workflow": "A patient appointment scheduling workflow that checks whether the user knows the desired doctor, appointment time, and the doctor\u2019s availability. If availability is unknown, the system verifies the doctor\u2019s schedule; if available the user can confirm or choose another doctor, and if unavailable the user is prompted to pick someone else. If the user has no specific doctor, the system lists available doctors in the relevant department at the requested time. When all details are known, an appointment registration step finalizes the booking, informs users of confirmation requirements (e.g., arrive 15 minutes early and a registration fee) or returns reasons if registration fails."
+    },
+    "12233102-ba1a-4302-b284-05428cc3547f": {
+        "domain": "Personal Assistant",
+        "role": "medical_consultant",
+        "scenario_name": "Get diagnostic results",
+        "workflow": "The workflow asks about the diagnosis and collects user info, then checks medical progress to see if the doctor has issued a diagnosis. If no diagnosis is available, the user is asked to wait or contact the doctor for another appointment. If a diagnosis exists, the user is informed and asked whether they need medication, hospitalization, or no treatment. Medication users receive details and can pay via a linked account or at the hospital; hospitalization users are directed to the department front desk; users needing no treatment are reassured and given options for a second opinion or psychological consultation."
+    },
+    "1bf1ee30-d926-43fd-809f-7403004348ae": {
+        "domain": "Customer Service",
+        "role": "restaurant_waiter",
+        "scenario_name": "Find a restaurant",
+        "workflow": "The workflow collects the user\u2019s location, cuisine preference, and dining time, then calls a restaurant search function. If no matches are found, the user is offered the option to search again; declining ends the process with an apology. If matches are found, a list of restaurants is presented and the user is asked if they are satisfied. If satisfied, the location is provided and the user is encouraged to visit. If not satisfied, the user is offered additional recommendations; declining to continue at any point ends the interaction with an apology."
+    },
+    "31fe2a3e-ab57-49d3-b5c7-fdf85584a72b": {
+        "domain": "Customer Service",
+        "role": "restaurant_waiter",
+        "scenario_name": "Book a restaurant",
+        "workflow": "User provides restaurant name, party size, and desired time; the system checks availability. If available, it collects contact details and special requests and attempts to book, then confirms the reservation and gives an arrival reminder. If unavailable (fully booked, wrong restaurant name, or closed), the user is informed and offered options to pick a different time or re-enter correct details. If a booking attempt fails (for example due to incorrect contact information), the user is asked to correct it and retry. The flow supports multiple paths to accommodate or resolve booking issues."
+    },
+    "2dfe18d3-125b-4587-a2b6-03546ec751f0": {
+        "domain": "E-tailing Recommandation",
+        "role": "online_shopping_support",
+        "scenario_name": "Search for products",
+        "workflow": "The workflow begins by collecting the user\u2019s product requirements and performing a search. If no matches are found, the user can adjust criteria or end the search; if matches are found, the options are presented and the user indicates satisfaction. A satisfied user can proceed to buy (item added to cart); a user who declines to buy has their reasons recorded as feedback. Users unhappy with the options can choose to refine their requirements and repeat the search or end the process. The loop supports iterative refinement of search criteria and captures feedback when purchases are not made."
+    },
+    "a908ae8d-9758-4a3f-adaa-f0846a361775": {
+        "domain": "E-tailing Recommandation",
+        "role": "online_shopping_support",
+        "scenario_name": "Shopping cart management",
+        "workflow": "The workflow guides a user from reviewing their shopping cart to completing an order. It starts by retrieving and presenting cart contents, then lets the user continue shopping, modify the cart, or proceed to checkout (with an option to delete and repurchase if a model must change). At checkout the user confirms items, the order is finalized, and a payment method is chosen\u2014either account balance (with insufficient-funds handling) or a payment link generated via linkPay. Payment status is verified and both user and merchant are informed; if payment fails, the user has a 24-hour window to complete payment before the order is canceled. Multiple decision points and payment options provide flexibility throughout the process."
+    },
+    "35dbbd92-f9bc-4b4d-b21e-0e64fcff628a": {
+        "domain": "E-tailing Recommandation",
+        "role": "online_shopping_support",
+        "scenario_name": "Order operations",
+        "workflow": "The workflow retrieves brief order info via lookOrders and verifies the user\u2019s account. If the account is valid, rough order details are shown; otherwise the user is asked to correct account information. The system then asks if the user wants to act on an order; if not, the session ends. If the user chooses to proceed, they select an order and its status is checked. For received orders the user can opt to return it (or be told returns require received status). For unreceived orders the user can view detailed info, cancel, expedite, or change the address; chosen actions are performed and results communicated. This loop repeats until the user has no more orders to operate on, then the interaction concludes."
+    },
+    "8173ea61-ee58-4213-abe2-a1fa14c160f0": {
+        "domain": "Robotic Process Automation",
+        "role": "printing_service",
+        "scenario_name": "File printing",
+        "workflow": "The workflow ensures documents are uploaded and audited before printing. It starts by checking whether the user has uploaded files to the company system; if not, the user must upload them and provide a file ID for auditing. If files are present, the operator confirms copy count and color requirements (default: one black-and-white copy) and schedules the print job accordingly. Errors such as missing or unprintable files trigger notifications asking the user to verify and re-upload. Throughout, file auditability and user notifications about status and issues are maintained."
+    },
+    "594e07e2-4189-4655-9a42-a9e07c511629": {
+        "domain": "Robotic Process Automation",
+        "role": "printing_service",
+        "scenario_name": "Notification of file results",
+        "workflow": "The workflow informs an employee about a file\u2019s print result, starting with identity verification via getEmployeeStatus. If verified, the system checks print status via getPrintResults: on success it confirms the document\u2019s page count to prevent leakage and then offers pickup or delivery (pickup returns a location and pickup number; delivery collects the workstation and schedules delivery only if someone is present). A page-count mismatch prevents delivery. If printing failed, the employee is told the likely reasons (e.g., format or size issues) and advised to contact the responsible person. If identity verification fails, the process stops with an apology."
+    },
+    "22a5b4b4-0182-42d3-9069-f18f5e93239e": {
+        "domain": "Travel&Transportation",
+        "role": "travel_assistant",
+        "scenario_name": "Travel guidance",
+        "workflow": "User requests travel guidance and provides preferences (mode, origin/destination, dates). The system checks vehicle availability; if none is found the user is asked to revise preferences. If a match is found, ride details are presented and the user can accept, reselect options, or choose to buy a ticket. If purchasing, a payment link is provided and the user is prompted to complete payment, with retries offered on failure. At any point the user may reconsider options or be informed if no suitable ride can be found."
+    },
+    "f9da7809-38d8-43bb-b6fd-fd3cf110ada2": {
+        "domain": "Travel&Transportation",
+        "role": "travel_assistant",
+        "scenario_name": "Weather services",
+        "workflow": "The system offers weather services with two main paths: setting reminders or checking the weather. For reminders, users can enable morning/evening notifications or unusual-weather alerts for imminent rainfall and air-quality changes. For weather checks, the system asks for location and date, tries to retrieve forecast data, shows results if available (and allows further searches), or informs the user and offers to continue searching if no data is found; the interaction loops until the user finishes, after which the system says goodbye."
+    },
+    "6727cdb8-f374-4db8-b59b-8f48f7ba0250": {
+        "domain": "Customer Service",
+        "role": "hotel_reception",
+        "scenario_name": "Find a hotel",
+        "workflow": "A looped hotel search workflow where the user provides search criteria, the system queries an API and shows matching hotels, and the user can accept options, ask for alternatives, or retry. After the interaction the user can rate or give feedback, and the process repeats as needed to refine results and improve satisfaction."
+    },
+    "6ecb63f6-74ce-4f9a-bdcb-d25c04dce41a": {
+        "domain": "Customer Service",
+        "role": "hotel_reception",
+        "scenario_name": "Book a hotel room",
+        "workflow": "A system-guided hotel booking flow that asks for hotel name and room count, checks availability via an API, and \u2014 if rooms are available \u2014 requests user confirmation (with a warning that bookings are final). After confirmation it collects personal and payment details and attempts to place the booking (retrying once); successful bookings are confirmed, repeated failures prompt alternative suggestions. If rooms are unavailable initially the user can try a different hotel or end the process, and the system provides clear status updates and options throughout."
+    },
+    "acb85afe-23c5-49b5-b66a-9615b1df0260": {
+        "domain": "Customer Service",
+        "role": "hotel_reception",
+        "scenario_name": "Book a hotel",
+        "workflow": "The workflow collects a hotel name, calls an API to find the hotel, and \u2014 if found \u2014 informs the user of the reservation fee and asks for confirmation. If the user confirms, a payment link is provided and the system checks the reservation; on success the room number is given, on failure the user can choose to try again or end the process. If the hotel isn\u2019t found or the user declines to confirm, the flow asks for a new hotel name or lets the user take their time before proceeding."
+    },
+    "b8a59056-00a4-4457-aa4f-f361ece37b1f": {
+        "domain": "Robotic Process Automation",
+        "role": "seal_management",
+        "scenario_name": "Seal Request",
+        "workflow": "The workflow directs selection of the appropriate company seal (official, financial, invoice, or contract) based on the user's need, then checks whether stamping is required and whether the document is electronic or paper. Financial and contract seals are restricted to internal use; invoice seals require determining invoice type because some electronic invoices may not need stamping. Paper documents are stamped by the finance office (user is referred to company leadership for location), electronic stamping is requested via an application call with results in 3\u20136 hours, and if stamping is not permitted the print request is denied."
+    },
+    "1e9503fd-0460-4d53-bb02-80dc443cfee2": {
+        "domain": "Robotic Process Automation",
+        "role": "seal_management",
+        "scenario_name": "Seal State Notification",
+        "workflow": "The workflow first verifies the caller\u2019s identity by confirming name and work number. If verified, it checks the print request outcome; on success the user selects pickup (given location and number) or delivery (informed to wait at their workstation), while on failure the user is notified of the reason (e.g., spec non-compliance or missing information) and advised to contact the printing supervisor before reapplying. If identity cannot be confirmed, the caller is apologized to and the process stops."
+    },
+    "5c7032fe-6c0c-4a2d-8c43-cc6e006aa387": {
+        "domain": "Robotic Process Automation",
+        "role": "attendance_arrangement",
+        "scenario_name": "Attendance Anomaly Detection",
+        "workflow": "The workflow starts by asking whether the user knows they left early or arrived late, then determines if they checked in. If a check-in exists but not recorded it flags a check-in failure and advises correct procedures; if they forgot to check in it records the reason (facial recognition failure, congestion, or other) and, for repeated forgetfulness within a month, issues warnings when occurrences exceed three. For facial-recognition issues it attempts to collect or correct facial data, and other reasons are collected for further review. Overall the process identifies causes of tardiness/early departures, enforces check-in rules, and provides appropriate guidance or corrective actions."
+    },
+    "11fd35e3-a085-46ac-8321-47018196b9d9": {
+        "domain": "Robotic Process Automation",
+        "role": "attendance_arrangement",
+        "scenario_name": "Shift Handover",
+        "workflow": "The workflow first verifies the user\u2019s identity; unverified users are denied service. For verified users it distinguishes shift transfers within three days versus later. Transfers beyond three days require a written application via the supervisor. For transfers within three days the focus is on securing a same-level successor: if one is found, shift details are collected to complete the transfer; if not, the user is asked whether they want assistance finding a successor or will keep searching themselves. If they ask for help and candidate contact info exists they are directed to contact that person; if no candidates exist they are offered the option to post their request for others to see \u2014 the request is posted if they agree, otherwise the process ends with an apology for not being able to help."
+    },
+    "0a560d1f-cccd-4dc4-b229-95a2c28f0953": {
+        "domain": "Robotic Process Automation",
+        "role": "invoice_management",
+        "scenario_name": "Invoice management",
+        "workflow": "The workflow begins with a user choice among three actions: checking a ticket (viewing its details and any invoices), importing tickets from SMS (validating the SMS and importing if valid, or notifying the user if invalid), and sending tickets by email (attempting delivery and confirming success or asking the user to verify the address). Each branch validates inputs and provides feedback based on the outcome."
+    },
+    "91e3d725-792c-473f-b731-47c3f216439b": {
+        "domain": "Robotic Process Automation",
+        "role": "invoice_management",
+        "scenario_name": "Invoice reimbursement",
+        "workflow": "The workflow lets a user view their invoices via a lookTicket call; on success they see available invoices and are asked if they want reimbursement. If there are no invoices they are prompted to collect tickets; if some are ineligible the user is informed. When invoices are eligible, trimTicket generates a reimbursement link which is shared with the user, who can choose to submit it for review; if submitted the reimburse step performs final moderation, otherwise the process ends."
+    },
+    "1e056ba1-4084-4ad6-8db7-276cd2ecd51b": {
+        "domain": "Travel&Transportation",
+        "role": "driving_service",
+        "scenario_name": "Consultation and appointment for Substitute driving service",
+        "workflow": "A user applies for a substitute driver service and provides reservation details (time, start/end points). The system checks vehicle availability via APIs (e.g., listService, taxiService) and uses user data like free time. If no suitable vehicle is found the user can try re-selecting or end the process with an apology. When a matching vehicle is available the system shows the model and asks for confirmation; on confirmation it attempts to place an order. Successful orders prompt a request for a review; failed orders return an explanation. User feedback is used to express thanks for positive responses or promise improvements for negative feedback."
+    },
+    "cc734648-5ba6-4039-b357-c57b7495693e": {
+        "domain": "Travel&Transportation",
+        "role": "driving_service",
+        "scenario_name": "Cancel driving appointments",
+        "workflow": "User provides reservation details which are used to look up a substitute driving appointment. If the reservation isn\u2019t found, the user is offered to retry the lookup, book a new appointment, or exit. If found, the user is asked to confirm cancellation; when confirmed an API call attempts the cancellation and the user is informed whether it succeeded or failed, with reasons or next steps as needed."
+    },
+    "00eb0b19-2092-48a3-811c-530f52171e8f": {
+        "domain": "Travel&Transportation",
+        "role": "driving_service",
+        "scenario_name": "Change surrogate driving reservation",
+        "workflow": "A user requests to modify a surrogate driving reservation. The system asks for reservation ID and time, searches for the booking, and repeats the lookup until the reservation is found or the user stops. Once located, the user is asked whether they want to change the reservation; if they confirm, they provide a new origin and destination and the system attempts the update. The update is retried as needed until it succeeds or the user cancels, and the user is informed of each outcome."
+    },
+    "ca37c286-01eb-481c-8b63-5bebd28fad75": {
+        "domain": "Travel&Transportation",
+        "role": "ride_service",
+        "scenario_name": "Initiate a ride order",
+        "workflow": "The workflow guides a user through booking a ride by collecting name, destination, and time, checking for available vehicles, and presenting options to select and confirm. Once confirmed, the booking is completed and details are provided; the user is then asked to rate the service, and the system responds with gratitude or an apology and promises to improve based on the rating or lack thereof. If no rides are available the user can retry or exit, in which case the process ends with an apology and goodbye."
+    },
+    "79c7091b-cc86-46d8-8542-4ec75e882600": {
+        "domain": "Travel&Transportation",
+        "role": "ride_service",
+        "scenario_name": "Initiate a ride change order",
+        "workflow": "The workflow handles ride-change requests by first collecting transfer details (passenger count, boarding time and location) and calling a vehicle lookup function to determine availability. If options exist, the system presents them and, upon user selection, confirms the reservation and collects a phone number for arrival notification. If the user declines, they are asked whether to modify their requirements; confirmed changes loop back to recheck availability, while refusal leads to an apology and a suggestion to retry later. If no suitable options are found initially, the user is prompted to supply new details and the process repeats until a resolution or termination."
+    }
+}
