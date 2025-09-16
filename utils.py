@@ -220,7 +220,7 @@ def summarize_role(role):
             if line["scenario"] in scenario_names:
                 scenarios.append(line["workflow"]["summary"])
 
-    return request_openai(
+    summary = request_openai(
         prompt=f"""
     ### Instructions:
     1. Write a high-level description of the provided role based on the provided scenarios.
@@ -234,6 +234,8 @@ def summarize_role(role):
     return your summary in the key "summary" in json format
     """
     )
+    summary = json.loads(summary.output_text.replace("```json", "").replace("```", ""))
+    return summary["summary"]
 
 
 def get_roles_by_domain(domain):
@@ -253,7 +255,7 @@ def summarize_domain(domain, roles=None):
         for role in role_names:
             roles.append(f"Role Name: {role}\nDescription: {role_descs[role]}")
     roles = "\n".join(roles)
-    return request_openai(
+    summary = request_openai(
         prompt=f"""
     ### Instructions:
     1. Write a high-level description of the provided domain based on the provided roles.
@@ -267,6 +269,8 @@ def summarize_domain(domain, roles=None):
     return your summary in the key "summary" in json format
     """
     )
+    summary = json.loads(summary.output_text.replace("```json", "").replace("```", ""))
+    return summary["summary"]
 
 
 def request_openai(prompt, model="gpt-4.1"):
@@ -277,9 +281,8 @@ def request_openai(prompt, model="gpt-4.1"):
 
     # Create a summary of the workflow
     client = OpenAI()
-    summary = client.responses.create(
+    resp = client.responses.create(
         model=model,
         input=prompt,
     )
-    summary = json.loads(summary.output_text.replace("```json", "").replace("```", ""))
-    return summary["summary"]
+    return resp
