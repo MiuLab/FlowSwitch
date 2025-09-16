@@ -312,81 +312,51 @@ def request_openai(prompt, model="gpt-4.1"):
     return resp
 
 
-def evaluate(input_file, output_file):
+def evaluate(input_file, output_file, topk=5):
     """Evaluate the predicted workflows"""
     input_data = load_jsonl(input_file)
     output_data = []
     # categorize input into different answer type
-    and_data = []
-    or_data = []
-    single_data = []
-    unk_data = []
+    data = {"AND": [], "OR": [], "SINGLE": [], "UNK": []}
+
     for item in tqdm(input_data):
         answer_type = item["answer type"]
         if answer_type == "AND":
-            and_data.append(item)
+            data["AND"].append(item)
         elif answer_type == "OR":
-            or_data.append(item)
+            data["OR"].append(item)
         elif answer_type == "SINGLE":
-            single_data.append(item)
+            data["SINGLE"].append(item)
         else:
-            unk_data.append(item)
+            data["UNK"].append(item)
 
-    # calculate accuracy for each answer type
-    correct = 0
-    cnt = 0
-    total_correct = 0
-    total_cnt = 0
-    for item in tqdm(and_data, desc="AND"):
-        gt = item["answer"]
-        pred = item["prediction"]
-        answer_type = item["answer type"]
-        if calculate_accuracy(gt, pred, answer_type):
-            correct += 1
-        cnt += 1
-    output_data.append({"answer type": "AND", "accuracy": correct / cnt})
-    total_correct += correct
-    total_cnt += cnt
-    correct = 0
-    cnt = 0
-    for item in tqdm(or_data, desc="OR"):
-        gt = item["answer"]
-        pred = item["prediction"]
-        answer_type = item["answer type"]
-        if calculate_accuracy(gt, pred, answer_type):
-            correct += 1
-        cnt += 1
-    output_data.append({"answer type": "OR", "accuracy": correct / cnt})
-    total_correct += correct
-    total_cnt += cnt
-    correct = 0
-    cnt = 0
-    for item in tqdm(single_data, desc="SINGLE"):
-        gt = item["answer"]
-        pred = item["prediction"]
-        answer_type = item["answer type"]
-        if calculate_accuracy(gt, pred, answer_type):
-            correct += 1
-        cnt += 1
-    output_data.append({"answer type": "SINGLE", "accuracy": correct / cnt})
-    total_correct += correct
-    total_cnt += cnt
-    correct = 0
-    cnt = 0
-    for item in tqdm(unk_data, desc="UNK"):
-        gt = item["answer"]
-        pred = item["prediction"]
-        answer_type = item["answer type"]
-        if calculate_accuracy(gt, pred, answer_type):
-            correct += 1
-        cnt += 1
-    output_data.append({"answer type": "UNK", "accuracy": correct / cnt})
-    total_correct += correct
-    total_cnt += cnt
-    # calculate overall accuracy
-    overall_accuracy = total_correct / total_cnt
-    output_data.append({"answer type": "overall", "accuracy": overall_accuracy})
-    save_jsonl(output_data, output_file)
+    output_data = {}
+    for i in range(1, topk + 1):
+        output_data["top" + str(i)] = []
+    answer_types = ["AND", "OR", "SINGLE", "UNK"]
+    for k in range(1, topk + 1):
+        total_correct = 0
+        total_cnt = 0
+        for answer_type in answer_types:
+            correct = 0
+            cnt = 0
+            for item in tqdm(data[answer_type], desc=f"{answer_type} top{k}"):
+                gt = item["answer"]
+                pred = item["prediction_top" + str(k)]
+                if calculate_accuracy(gt, pred, answer_type):
+                    correct += 1
+                cnt += 1
+            output_data["top" + str(k)].append(
+                {"answer type": answer_type, "accuracy": correct / cnt}
+            )
+            total_correct += correct
+            total_cnt += cnt
+        # calculate overall accuracy
+        overall_accuracy = total_correct / total_cnt
+        output_data["top" + str(k)].append(
+            {"answer type": "overall", "accuracy": overall_accuracy}
+        )
+    save_json(output_data, output_file)
 
 
 def calculate_accuracy(gt, pred, answer_type):

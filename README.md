@@ -20,7 +20,10 @@ After the retrieval, the final prediction should be appended as a key "predictio
 And each of the json objects in the jsonl file must contain the following keys, before running the `eval.py`:
 - answer: the gt workflows' uuid
 - answer_type: the type of answer (AND, OR, SINGLE, UNK)
-- prediction: the predicted workflows' uuid
+- prediction_top1: the predicted workflows' uuid at top 1
+- prediction_top2: the predicted workflows' uuid at top 2
+.... til topk
+
 For example:
 input.jsonl must be like:
 ```bash
