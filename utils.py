@@ -1,6 +1,7 @@
 import os
 import json
 import jsonlines
+import tqdm
 
 MAPPING = {
     "Customer Service": {
@@ -95,6 +96,30 @@ MAPPING = {
 }
 
 
+def load_json(filename: str):
+    """Load a json file"""
+    with open(filename, "r") as f:
+        return json.load(f)
+
+
+def load_jsonl(filename: str):
+    """Load a jsonl file"""
+    with jsonlines.open(filename, "r") as f:
+        return list(f)
+
+
+def save_jsonl(data, filename):
+    """Save a jsonl file"""
+    with jsonlines.open(filename, "w") as writer:
+        writer.write_all(data)
+
+
+def save_json(data, filename):
+    """Save a json file"""
+    with open(filename, "w") as f:
+        json.dump(data, f)
+
+
 def load_pool(pool_name: str):
     """
     Loads a specified pool from the corresponding JSON file.
@@ -109,8 +134,7 @@ def load_pool(pool_name: str):
     if not os.path.exists(pool_path):
         raise FileNotFoundError(f"Pool file not found: {pool_path}")
 
-    with open(pool_path, "r") as f:
-        return json.load(f)
+    return load_json(pool_path)
 
 
 def load_bm25_retriever(pool_name: str):
@@ -286,3 +310,98 @@ def request_openai(prompt, model="gpt-4.1"):
         input=prompt,
     )
     return resp
+
+
+def evaluate(input_file, output_file):
+    """Evaluate the predicted workflows"""
+    input_data = load_jsonl(input_file)
+    output_data = []
+    # categorize input into different answer type
+    and_data = []
+    or_data = []
+    single_data = []
+    unk_data = []
+    for item in tqdm(input_data):
+        answer_type = item["answer type"]
+        if answer_type == "AND":
+            and_data.append(item)
+        elif answer_type == "OR":
+            or_data.append(item)
+        elif answer_type == "SINGLE":
+            single_data.append(item)
+        else:
+            unk_data.append(item)
+
+    # calculate accuracy for each answer type
+    correct = 0
+    cnt = 0
+    total_correct = 0
+    total_cnt = 0
+    for item in tqdm(and_data, desc="AND"):
+        gt = item["answer"]
+        pred = item["prediction"]
+        answer_type = item["answer type"]
+        if calculate_accuracy(gt, pred, answer_type):
+            correct += 1
+        cnt += 1
+    output_data.append({"answer type": "AND", "accuracy": correct / cnt})
+    total_correct += correct
+    total_cnt += cnt
+    correct = 0
+    cnt = 0
+    for item in tqdm(or_data, desc="OR"):
+        gt = item["answer"]
+        pred = item["prediction"]
+        answer_type = item["answer type"]
+        if calculate_accuracy(gt, pred, answer_type):
+            correct += 1
+        cnt += 1
+    output_data.append({"answer type": "OR", "accuracy": correct / cnt})
+    total_correct += correct
+    total_cnt += cnt
+    correct = 0
+    cnt = 0
+    for item in tqdm(single_data, desc="SINGLE"):
+        gt = item["answer"]
+        pred = item["prediction"]
+        answer_type = item["answer type"]
+        if calculate_accuracy(gt, pred, answer_type):
+            correct += 1
+        cnt += 1
+    output_data.append({"answer type": "SINGLE", "accuracy": correct / cnt})
+    total_correct += correct
+    total_cnt += cnt
+    correct = 0
+    cnt = 0
+    for item in tqdm(unk_data, desc="UNK"):
+        gt = item["answer"]
+        pred = item["prediction"]
+        answer_type = item["answer type"]
+        if calculate_accuracy(gt, pred, answer_type):
+            correct += 1
+        cnt += 1
+    output_data.append({"answer type": "UNK", "accuracy": correct / cnt})
+    total_correct += correct
+    total_cnt += cnt
+    # calculate overall accuracy
+    overall_accuracy = total_correct / total_cnt
+    output_data.append({"answer type": "overall", "accuracy": overall_accuracy})
+    save_jsonl(output_data, output_file)
+
+
+def calculate_accuracy(gt, pred, answer_type):
+    """
+    Calculate the accuracy of the predicted workflows
+    SINGLE -> exact match
+    OR -> at least one of the workflows in the prediction is in the gt
+    AND -> all the workflows in the prediction are in the gt
+    UNK -> the prediction should be empty
+    """
+    if answer_type == "SINGLE":
+        return gt == pred
+    elif answer_type == "OR":
+        return len(set(gt).intersection(set(pred))) > 0
+    elif answer_type == "AND":
+        return len(set(gt).intersection(set(pred))) == len(set(gt))
+    else:
+        return len(pred) == 0
