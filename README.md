@@ -19,6 +19,7 @@ Use the function in `utils.py` for the following:
 After the retrieval, the final prediction should be appended as a key "prediction" into the original jsonl file.
 And each of the json objects in the jsonl file must contain the following keys, before running the `eval.py`:
 - answer: the gt workflows' uuid
+- answer_type: the type of answer (AND, OR, SINGLE, UNK)
 - prediction: the predicted workflows' uuid
 For example:
 input.jsonl must be like:
