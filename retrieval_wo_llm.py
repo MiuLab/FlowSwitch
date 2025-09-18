@@ -508,10 +508,7 @@ def main():
                 ensure_answer_type_key(enriched)
                 enriched["prediction"] = preds
                 for i in range(1, args.topk + 1):
-                    if i <= len(preds):
-                        enriched[f"prediction_top{i}"] = [preds[i - 1]]
-                    else:
-                        enriched[f"prediction_top{i}"] = []
+                    enriched[f"prediction_top{i}"] = preds[:i]
                 outputs.append(enriched)
 
             output_path = (
