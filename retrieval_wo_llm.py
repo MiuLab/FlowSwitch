@@ -291,19 +291,12 @@ def run_hier_domain(
     candidate_ids: List[str] = []
     for domain, _ in domain_scores:
         candidate_ids.extend(domain_to_ids.get(domain, []))
-    restricted = []
-    if candidate_ids:
-        restricted = scenario_index.search(
-            query,
-            top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
-            allowed_ids=candidate_ids,
-        )
-    global_results = scenario_index.search(query, top_k=top_k * CANDIDATE_MULTIPLIER)
-    return merge_with_priority(
-        restricted,
-        global_results,
-        boost=0.5,
-        limit=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+    if not candidate_ids:
+        return []
+    return scenario_index.search(
+        query,
+        top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+        allowed_ids=candidate_ids,
     )
 
 
@@ -319,19 +312,12 @@ def run_hier_role(
     candidate_ids: List[str] = []
     for role, _ in role_scores:
         candidate_ids.extend(role_to_ids.get(role, []))
-    restricted = []
-    if candidate_ids:
-        restricted = scenario_index.search(
-            query,
-            top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
-            allowed_ids=candidate_ids,
-        )
-    global_results = scenario_index.search(query, top_k=top_k * CANDIDATE_MULTIPLIER)
-    return merge_with_priority(
-        restricted,
-        global_results,
-        boost=0.5,
-        limit=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+    if not candidate_ids:
+        return []
+    return scenario_index.search(
+        query,
+        top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+        allowed_ids=candidate_ids,
     )
 
 
@@ -356,19 +342,12 @@ def run_hier_domain_role(
         )
         for role, _ in role_candidates:
             candidate_ids.extend(role_map.get(role, []))
-    restricted = []
-    if candidate_ids:
-        restricted = scenario_index.search(
-            query,
-            top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
-            allowed_ids=candidate_ids,
-        )
-    global_results = scenario_index.search(query, top_k=top_k * CANDIDATE_MULTIPLIER)
-    return merge_with_priority(
-        restricted,
-        global_results,
-        boost=1.0,
-        limit=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+    if not candidate_ids:
+        return []
+    return scenario_index.search(
+        query,
+        top_k=max(top_k * CANDIDATE_MULTIPLIER, top_k),
+        allowed_ids=candidate_ids,
     )
 
 
@@ -436,9 +415,9 @@ def main():
             scenario_embeddings = scenario_embeddings_map[pool_key]
             outputs = []
             for item, query_dict in zip(data, queries):
-                query_text = query_dict["primary"] or query_dict["full"]
+                query_text = query_dict["full"]
                 if not query_text:
-                    query_text = query_dict["full"]
+                    continue
 
                 def fetch(q: str) -> List[Tuple[str, float]]:
                     if method == "naive":
@@ -475,13 +454,6 @@ def main():
                     raise ValueError(f"Unknown method: {method}")
 
                 candidate_pairs = fetch(query_text)
-                if (
-                    not candidate_pairs
-                    and query_dict["full"]
-                    and query_dict["full"] != query_text
-                ):
-                    candidate_pairs = fetch(query_dict["full"])
-
                 if method == "naive":
                     candidate_pairs = candidate_pairs[
                         : max(args.topk * CANDIDATE_MULTIPLIER, args.topk)
