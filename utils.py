@@ -368,7 +368,7 @@ def calculate_accuracy(gt, pred, answer_type):
     UNK -> the prediction should be empty
     """
     if answer_type == "SINGLE":
-        return gt == pred
+        return (gt[0] in pred)
     elif answer_type == "OR":
         return len(set(gt).intersection(set(pred))) > 0
     elif answer_type == "AND":
