@@ -1,15 +1,29 @@
-# llm_input: name + description
-# input: full-message
-# 不含eval部分
+"""
+Run workflow retrieval experiments with LLM-based hierarchical retrieval.
+Usage:
+    python retrieval_w_llm.py --input data/turn_level_data_final.jsonl \
+        --output-dir outputs_w_llm --topk 5 --methods hier_domain hier_role \
+        --pool-types text code --last-n-turns 0
+Arguments:
+    --input            Path to the turn-level JSONL file.
+    --output-dir       Directory to store the enriched JSONL outputs.
+    --methods          Retrieval methods to run (hier_domain, hier_role, hier_domain_role).
+    --pool-types       Which scenario pools to use (summary, text, code, flowchart).
+    --topk             Number of predictions to output per turn.
+    --last-n-turns     Use only last n turns (0=all, 1=last 1 turn, 2=last 2 turns, etc).
+"""
 
 import json
 import jsonlines
 import os
 from typing import List, Dict, Tuple, Any
-from utils import load_pool, load_bm25_retriever, load_reranker, MAPPING
+from utils import load_pool, load_bm25_retriever, load_reranker, MAPPING, evaluate
 from request_qwen import request_qwen_chat
 import numpy as np
 import logging
+import argparse
+import pandas as pd
+import glob
 from tqdm import tqdm
 from datetime import datetime
 from rank_bm25 import BM25Okapi
@@ -295,7 +309,10 @@ Selected {selection_type}s:"""
         
         return final_results
     
-    def format_messages_to_query(self, messages):
+    def format_messages_to_query(self, messages, last_n_turns=0):
+        if last_n_turns > 0:
+            messages = messages[-last_n_turns * 2:] if len(messages) > last_n_turns * 2 else messages
+        
         query_parts = []
         for msg in messages:
             role = msg.get('role', '')
@@ -303,6 +320,72 @@ Selected {selection_type}s:"""
             if role and content:
                 query_parts.append(f"{role}: {content}")
         return " | ".join(query_parts)
+
+def run_evaluation_and_summary(output_dir, methods, pool_types):
+    summary_data = []
+    
+    for pool_type in pool_types:
+        for method_name, _ in methods:
+            pattern = f"{output_dir}/results_{pool_type}_{method_name}*.jsonl"
+            result_files = glob.glob(pattern)
+            
+            for result_file in result_files:
+                if os.path.exists(result_file):
+                    try:
+                        eval_output = result_file.replace('.jsonl', '_eval.json')
+                        evaluate(result_file, eval_output, topk=5)
+
+                        with open(eval_output, 'r', encoding='utf-8') as f:
+                            eval_data = json.load(f)
+
+                        filename = os.path.basename(result_file)
+
+                        for topk in range(1, 6):
+                            topk_key = f"top{topk}"
+                            if topk_key in eval_data:
+                                row = {
+                                    'filename': filename,
+                                    'topk': topk,
+                                    'overall': 0,
+                                    'SINGLE': 0,
+                                    'AND': 0,
+                                    'OR': 0,
+                                    'UNK': 0
+                                }
+
+                                total_samples = 0
+                                correct_samples = 0
+                                
+                                for result in eval_data[topk_key]:
+                                    answer_type = result['answer_type']
+                                    accuracy = result['accuracy']
+                                    count = result.get('count', 0)
+                                    
+                                    row[answer_type] = accuracy
+                                    total_samples += count
+                                    correct_samples += accuracy * count
+                                
+                                if total_samples > 0:
+                                    row['overall'] = correct_samples / total_samples
+                                
+                                summary_data.append(row)
+                    
+                    except Exception as e:
+                        logger.error(f"Error evaluating {result_file}: {e}")
+
+    if summary_data:
+        df = pd.DataFrame(summary_data)
+        summary_file = f"{output_dir}/evaluation_summary.csv"
+        df.to_csv(summary_file, index=False)
+        logger.info(f"Evaluation summary saved to: {summary_file}")
+
+        for topk in range(1, 6):
+            topk_data = df[df['topk'] == topk]
+            if not topk_data.empty:
+                print(f"\n=== Top-{topk} Results ===")
+                print(topk_data.to_string(index=False))
+    
+    return summary_data
 
 def setup_logging(log_file):
     logging.basicConfig(
@@ -322,29 +405,31 @@ def load_test_data(filepath):
             data.append(obj)
     return data
 
-def run_hierarchical_experiments():
+def run_hierarchical_experiments(args):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"hierarchical_retrieval_experiment_{timestamp}.log"
+    log_file = f"{args.output_dir}/hierarchical_retrieval_experiment_{timestamp}.log"
+    os.makedirs(args.output_dir, exist_ok=True)
+    
     logger = setup_logging(log_file)
     
     logger.info(f"Starting hierarchical retrieval experiments")
     logger.info(f"Log file: {log_file}")
+    logger.info(f"Arguments: {args}")
 
-    test_data = load_test_data("data/turn_level_data_final.jsonl")
+    test_data = load_test_data(args.input)
     logger.info(f"Loaded {len(test_data)} test samples")
 
-    retrievers = {
-        "text": HierarchicalRetriever(pool_name="workflow_text", use_reranker=True),    
-        "code": HierarchicalRetriever(pool_name="workflow_code", use_reranker=True),
-        "flowchart": HierarchicalRetriever(pool_name="workflow_flowchart", use_reranker=True),
-        "summary": HierarchicalRetriever(pool_name="workflow_summary", use_reranker=True),
+    retrievers = {}
+    for pool_type in args.pool_types:
+        retrievers[pool_type] = HierarchicalRetriever(pool_name=f"workflow_{pool_type}", use_reranker=True)
+
+    method_mapping = {
+        "hier_domain": ("2layer_domain_scenario", "retrieve_2layer_domain_scenario"),
+        "hier_role": ("2layer_role_scenario", "retrieve_2layer_role_scenario"), 
+        "hier_domain_role": ("3layer_domain_role_scenario", "retrieve_3layer_domain_role_scenario")
     }
     
-    methods = [
-        ("2layer_domain_scenario", "retrieve_2layer_domain_scenario"),
-        ("2layer_role_scenario", "retrieve_2layer_role_scenario"), 
-        ("3layer_domain_role_scenario", "retrieve_3layer_domain_role_scenario")
-    ]
+    methods = [(method_mapping[m][0], method_mapping[m][1]) for m in args.methods if m in method_mapping]
 
     for pool_name, retriever in retrievers.items():
         logger.info(f"{'='*80}")
@@ -354,20 +439,34 @@ def run_hierarchical_experiments():
         for method_name, method_func in methods:
             logger.info(f"Testing {method_name}...")
 
-            output_file = f"results_{pool_name}_{method_name}.jsonl"
+            if args.last_n_turns > 0:
+                output_file = f"{args.output_dir}/results_{pool_name}_{method_name}_last{args.last_n_turns}turns.jsonl"
+            else:
+                output_file = f"{args.output_dir}/results_{pool_name}_{method_name}.jsonl"
+
+            if os.path.exists(output_file):
+                try:
+                    with jsonlines.open(output_file, 'r') as reader:
+                        processed_count = sum(1 for _ in reader)
+                    
+                    if processed_count >= len(test_data):
+                        logger.info(f"File {output_file} already complete with {processed_count} samples, skipping...")
+                        continue
+                    else:
+                        logger.info(f"File {output_file} incomplete ({processed_count}/{len(test_data)}), continuing...")
+                except Exception as e:
+                    logger.warning(f"Error reading {output_file}: {e}")
 
             processed_turn_ids = set()
             
             if os.path.exists(output_file):
-                logger.info(f"Found existing results file: {output_file}")
                 try:
                     with jsonlines.open(output_file, 'r') as reader:
                         for obj in reader:
                             processed_turn_ids.add(obj.get('turn_id'))
-                    logger.info(f"Already processed {len(processed_turn_ids)} samples, continuing from where left off...")
+                    logger.info(f"Already processed {len(processed_turn_ids)} samples, continuing...")
                 except Exception as e:
-                    logger.warning(f"Error reading existing results file: {e}")
-                    logger.info("Starting from beginning due to corrupted results file")
+                    logger.warning(f"Error reading existing results: {e}")
                     processed_turn_ids = set()
             
             processed_count = len(processed_turn_ids)
@@ -383,20 +482,20 @@ def run_hierarchical_experiments():
                     ground_truth = item.get('answer', [])
                     answer_type = item.get('answer_type', 'SINGLE')
 
-                    query = retriever.format_messages_to_query(messages)
+                    query = retriever.format_messages_to_query(messages, args.last_n_turns)
                     
                     if not query.strip():
                         logger.warning(f"Empty query for turn {turn_id}")
                         continue
 
                     method = getattr(retriever, method_func)
-                    predictions = method(query, top_k=5)
+                    predictions = method(query, top_k=args.topk)
 
                     result_item = {
                         'turn_id': turn_id,
                         'messages': messages,
                         'answer': ground_truth,
-                        'answer type': answer_type,
+                        'answer_type': answer_type,
                         'prediction_top1': predictions[:1] if predictions else [],
                         'prediction_top2': predictions[:2] if predictions else [],
                         'prediction_top3': predictions[:3] if predictions else [],
@@ -434,5 +533,25 @@ def run_hierarchical_experiments():
             logger.info(f"Completed {method_name} for {pool_name}")
             logger.info(f"Total processed samples: {processed_count}")
 
+    logger.info("Running evaluation and generating summary...")
+    run_evaluation_and_summary(args.output_dir, methods, args.pool_types)
+
+def main():
+    parser = argparse.ArgumentParser(description="Run hierarchical workflow retrieval experiments")
+    parser.add_argument("--input", type=str, required=True, help="Path to the turn-level JSONL file")
+    parser.add_argument("--output-dir", type=str, default="outputs_w_llm", help="Directory to store outputs")
+    parser.add_argument("--topk", type=int, default=5, help="Number of predictions to output per turn")
+    parser.add_argument("--methods", nargs='+', default=["hier_domain", "hier_role", "hier_domain_role"], 
+                       choices=["hier_domain", "hier_role", "hier_domain_role"],
+                       help="Retrieval methods to run")
+    parser.add_argument("--pool-types", nargs='+', default=["text", "code", "flowchart", "summary"],
+                       choices=["text", "code", "flowchart", "summary"],
+                       help="Which scenario pools to use")
+    parser.add_argument("--last-n-turns", type=int, default=0, 
+                       help="Use only last n turns (0=all, 1=last 1 turn, 2=last 2 turns, etc)")
+    
+    args = parser.parse_args()
+    run_hierarchical_experiments(args)
+
 if __name__ == "__main__":
-    run_hierarchical_experiments()
+    main()
