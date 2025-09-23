@@ -4,3 +4,6 @@ openai
 rank_bm25
 sentence-transformers
 transformers
+llama-index-core
+llama-index-llms-openai
+llama-index-llms-vllm
