@@ -1,29 +1,30 @@
-"""Run workflow retrieval experiments without LLM generated descriptions.
+"""Workflow retrieval helpers with a simple function-based API.
 
-Usage:
-    python retrieval_wo_llm.py --input data/turn_level_data_final.jsonl \
-        --output-dir outputs_wo_llm --topk 5 --score-threshold 12
+Usage example::
 
-Arguments:
-    --input            Path to the turn-level JSONL file.
-    --output-dir       Directory to store the enriched JSONL outputs.
-    --methods          Retrieval methods to run (naive, hier_domain, hier_role, hier_domain_role).
-    --pool-types       Which scenario pools to use (summary, text, code, flowchart).
-    --topk             Number of predictions to output per turn.
-    --score-threshold  Minimum BM25 score; lower scores produce empty predictions.
+    from retrieval_wo_llm import retrieve_workflows
+
+    dialogue = [
+        {"role": "user", "content": "Please find a dinner restaurant for me."},
+        {"role": "assistant", "content": "Sure, what cuisine are you interested in?"},
+        {"role": "user", "content": "Italian for two people."},
+    ]
+
+    workflows = retrieve_workflows(dialogue, topk=5, query_variant="last3")
+
+Callers can import this module to run retrieval directly without relying on the
+CLI batch runner.
 """
 
-import argparse
-import json
+from __future__ import annotations
+
 import re
-from collections import defaultdict
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 
-from utils import load_jsonl, load_pool, load_reranker, save_jsonl
+from utils import load_pool, load_reranker
 
 try:
     from rank_bm25 import BM25Okapi
@@ -41,6 +42,27 @@ POOL_NAME_MAP = {
 METHODS = ["naive", "hier_domain", "hier_role", "hier_domain_role"]
 CANDIDATE_MULTIPLIER = 5
 
+DEFAULT_METHOD = "naive"
+DEFAULT_POOL_TYPE = "flowchart"
+DEFAULT_QUERY_VARIANT = "last3"
+
+VALID_QUERY_VARIANTS = {"full", "last1", "last2", "last3"}
+QUERY_VARIANT_ALIASES = {
+    "last1~3": "last3",
+    "last1-3": "last3",
+    "last1to3": "last3",
+}
+
+
+def normalize_variant(name: str) -> str:
+    lowered = name.strip().lower()
+    normalized = QUERY_VARIANT_ALIASES.get(lowered, lowered)
+    if normalized not in VALID_QUERY_VARIANTS:
+        raise ValueError(
+            f"Unsupported query variant '{name}'. Supported options: {sorted(VALID_QUERY_VARIANTS)}"
+        )
+    return normalized
+
 
 def simple_tokenize(text: str) -> List[str]:
     return [token for token in re.split(r"\W+", text.lower()) if token]
@@ -50,13 +72,11 @@ class BM25Index:
     """Wrapper that keeps ids associated with BM25 tokens."""
 
     def __init__(self, items: Sequence[Tuple[str, str]]):
-        self.ids = []
-        self.texts = []
-        tokenized = []
+        self.ids: List[str] = []
+        tokenized: List[List[str]] = []
         for item_id, text in items:
             self.ids.append(item_id)
             cleaned = text.replace("\n", " ")
-            self.texts.append(cleaned)
             tokenized.append(simple_tokenize(cleaned))
         self.model = BM25Okapi(tokenized)
 
@@ -82,136 +102,73 @@ class BM25Index:
 
 def clean_content(content: str) -> str:
     text = content.replace("\n", " ")
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def extract_last_user_messages(messages: Sequence[Dict], limit: int) -> List[str]:
-    snippets: List[str] = []
-    for msg in reversed(messages):
-        if msg.get("role") != "user":
-            continue
-        text = clean_content(msg.get("content", ""))
-        if text:
-            snippets.append(text)
-        if len(snippets) >= limit:
-            break
-    snippets.reverse()
-    return snippets
-
-
-def extract_action_blocks(messages: Sequence[Dict]) -> Tuple[str, str]:
-    action_name = ""
-    action_params = ""
-    for msg in reversed(messages):
-        if msg.get("role") != "assistant":
-            continue
-        content = msg.get("content", "")
-        if not action_name:
-            match = re.search(r"Action\s*:\s*([\w.-]+)", content)
-            if match:
-                action_name = match.group(1)
-        if not action_params:
-            match = re.search(r"Action Input\s*:\s*(\{.*\})", content, re.DOTALL)
-            if match:
-                raw = match.group(1).strip()
-                parsed = None
-                try:
-                    parsed = json.loads(raw)
-                except Exception:
-                    pass
-                if isinstance(parsed, dict):
-                    flat_parts: List[str] = []
-
-                    def flatten(prefix: str, value):
-                        if isinstance(value, dict):
-                            for k, v in value.items():
-                                flatten(f"{prefix}{k} ", v)
-                        else:
-                            flat_parts.append(f"{prefix}{value}")
-
-                    flatten("", parsed)
-                    action_params = " ".join(flat_parts)
-                else:
-                    action_params = re.sub(r"[^A-Za-z0-9 ]+", " ", raw)
-        if action_name and action_params:
-            break
-    return action_name, action_params
-
-
-def extract_intent(messages: Sequence[Dict]) -> str:
-    for msg in reversed(messages):
-        if msg.get("role") != "assistant":
-            continue
-        content = msg.get("content", "")
-        match = re.search(r"intent\s*=\s*([^,\n\.]+)", content)
-        if match:
-            return clean_content(match.group(1))
-    return ""
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def build_last_history(messages: Sequence[Dict], max_turns: int = 3) -> str:
-    window = max_turns * 2
-    selected = messages[-window:]
-    snippets = [f"{msg['role']}: {clean_content(msg.get('content', ''))}" for msg in selected]
+    if max_turns <= 0:
+        return ""
+
+    collected: List[Dict] = []
+    user_count = 0
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            if user_count >= max_turns:
+                break
+            user_count += 1
+        collected.append(msg)
+
+    collected.reverse()
+    snippets = [
+        f"{msg['role']}: {clean_content(msg.get('content', ''))}" for msg in collected
+    ]
     return " ".join(snippets)
 
 
 def build_full_history(messages: Sequence[Dict]) -> str:
-    snippets = [f"{msg['role']}: {clean_content(msg.get('content', ''))}" for msg in messages]
+    snippets = [
+        f"{msg['role']}: {clean_content(msg.get('content', ''))}" for msg in messages
+    ]
     return " ".join(snippets)
 
 
-def compose_query(messages: Sequence[Dict], max_turns: int = 3) -> Dict[str, str]:
-    user_texts = extract_last_user_messages(messages, limit=max_turns)
-    action_name, action_params = extract_action_blocks(messages)
-    intent = extract_intent(messages)
-
-    structured_parts = [" ".join(user_texts), action_name, action_params, intent]
-    primary = " ".join(part for part in structured_parts if part).strip()
-
-    last_history = build_last_history(messages, max_turns=max_turns)
-    full_history = build_full_history(messages)
-
-    if not primary:
-        primary = last_history or full_history
-
-    return {
-        "primary": primary,
-        "last": last_history,
-        "full": full_history,
-    }
-
-
-def merge_with_priority(
-    primary: Sequence[Tuple[str, float]],
-    secondary: Sequence[Tuple[str, float]],
-    boost: float,
-    limit: int,
-) -> List[Tuple[str, float]]:
-    scored: Dict[str, float] = {}
-    for doc_id, score in primary:
-        scored[doc_id] = max(scored.get(doc_id, float("-inf")), score + boost)
-    for doc_id, score in secondary:
-        scored[doc_id] = max(scored.get(doc_id, float("-inf")), score)
-    ordered = sorted(scored.items(), key=lambda item: item[1], reverse=True)
-    return [(doc_id, score) for doc_id, score in ordered[:limit]]
+def compose_query(
+    messages: Sequence[Dict], requested_variants: Sequence[str], max_turns: int = 3
+) -> Dict[str, str]:
+    queries: Dict[str, str] = {}
+    if "full" in requested_variants:
+        queries["full"] = build_full_history(messages)
+    for variant in requested_variants:
+        if variant == "full" or variant in queries:
+            continue
+        if variant.startswith("last"):
+            try:
+                turn_count = int(variant[4:])
+            except ValueError as exc:
+                raise ValueError(f"Invalid last-turn variant: {variant}") from exc
+            effective_turns = max(1, min(turn_count, max_turns))
+            queries[variant] = build_last_history(messages, max_turns=effective_turns)
+            continue
+        raise ValueError(f"Unknown query variant: {variant}")
+    return queries
 
 
-def build_metadata(base_pool: Dict[str, Dict]) -> Tuple[
+def build_metadata(
+    base_pool: Dict[str, Dict],
+) -> Tuple[
     Dict[str, List[str]],
     Dict[str, List[str]],
     Dict[str, Dict[str, List[str]]],
 ]:
-    domain_to_ids: Dict[str, List[str]] = defaultdict(list)
-    role_to_ids: Dict[str, List[str]] = defaultdict(list)
-    domain_role_to_ids: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+    domain_to_ids: Dict[str, List[str]] = {}
+    role_to_ids: Dict[str, List[str]] = {}
+    domain_role_to_ids: Dict[str, Dict[str, List[str]]] = {}
     for uuid, info in base_pool.items():
         domain = info.get("domain", "")
         role = info.get("role", "")
-        domain_to_ids[domain].append(uuid)
-        role_to_ids[role].append(uuid)
-        domain_role_to_ids[domain][role].append(uuid)
+        domain_to_ids.setdefault(domain, []).append(uuid)
+        role_to_ids.setdefault(role, []).append(uuid)
+        domain_role_to_ids.setdefault(domain, {}).setdefault(role, []).append(uuid)
     return domain_to_ids, role_to_ids, domain_role_to_ids
 
 
@@ -221,16 +178,21 @@ def rerank_candidates(
     reranker_model,
     scenario_embeddings: Dict[str, torch.Tensor],
     top_k: int,
+    query_embedding: Optional[torch.Tensor] = None,
 ) -> List[Tuple[str, float]]:
     if not candidates:
         return []
     doc_ids = [doc_id for doc_id, _ in candidates if doc_id in scenario_embeddings]
     if not doc_ids:
         return []
-    query_embedding = reranker_model.encode(
-        query_text, convert_to_tensor=True, normalize_embeddings=True
-    )
+    if reranker_model is None:
+        return [(doc_id, score) for doc_id, score in candidates[:top_k]]
+    if query_embedding is None:
+        query_embedding = reranker_model.encode(
+            query_text, convert_to_tensor=True, normalize_embeddings=True
+        )
     doc_embeddings = torch.stack([scenario_embeddings[doc_id] for doc_id in doc_ids])
+    query_embedding = query_embedding.to(doc_embeddings.device)
     scores = util.cos_sim(query_embedding, doc_embeddings)[0]
     reranked = [
         (doc_id, float(score)) for doc_id, score in zip(doc_ids, scores.detach().cpu())
@@ -265,7 +227,7 @@ def build_scenario_index(
                 texts, convert_to_tensor=True, normalize_embeddings=True
             )
             for (doc_id, _), emb in zip(documents, doc_embs):
-                embeddings[doc_id] = emb
+                embeddings[doc_id] = emb.detach().cpu()
     return index, metadata, embeddings
 
 
@@ -351,45 +313,12 @@ def run_hier_domain_role(
     )
 
 
-def ensure_answer_type_key(entry: Dict) -> None:
-    if "answer type" not in entry and "answer_type" in entry:
-        entry["answer type"] = entry["answer_type"]
+_RESOURCE_CACHE: Dict[str, object] = {}
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Workflow retrieval without LLM support")
-    parser.add_argument("--input", type=str, required=True, help="Turn-level jsonl input")
-    parser.add_argument(
-        "--output-dir", type=str, required=True, help="Directory to store retrieval outputs"
-    )
-    parser.add_argument("--topk", type=int, default=5)
-    parser.add_argument("--domain-top-n", type=int, default=3)
-    parser.add_argument("--role-top-n", type=int, default=3)
-    parser.add_argument("--last-turns", type=int, default=3)
-    parser.add_argument(
-        "--methods", nargs="+", choices=METHODS, default=METHODS, help="Retrieval methods"
-    )
-    parser.add_argument(
-        "--pool-types",
-        nargs="+",
-        choices=list(POOL_NAME_MAP.keys()),
-        default=list(POOL_NAME_MAP.keys()),
-        help="Which pools to evaluate",
-    )
-    parser.add_argument(
-        "--score-threshold",
-        type=float,
-        default=12.0,
-        help="Minimum BM25 score required for a non-empty prediction",
-    )
-    args = parser.parse_args()
-
-    input_path = Path(args.input)
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    data = load_jsonl(str(input_path))
-    queries = [compose_query(item["messages"], max_turns=args.last_turns) for item in data]
+def _ensure_resources() -> Dict[str, object]:
+    if _RESOURCE_CACHE:
+        return _RESOURCE_CACHE
 
     reranker_model = load_reranker()
 
@@ -398,97 +327,201 @@ def main():
 
     domain_desc = load_pool("domain_desc")
     role_desc = load_pool("role_desc")
-    domain_index = BM25Index([(domain, desc) for domain, desc in domain_desc.items()])
-    role_index = BM25Index([(role, desc) for role, desc in role_desc.items()])
+    domain_index = BM25Index(
+        [(domain, f"{domain} {desc}") for domain, desc in domain_desc.items()]
+    )
+    role_index = BM25Index(
+        [(role, f"{role} {desc}") for role, desc in role_desc.items()]
+    )
 
     scenario_indexes: Dict[str, BM25Index] = {}
     scenario_embeddings_map: Dict[str, Dict[str, torch.Tensor]] = {}
-    for pool_key in args.pool_types:
-        pool_name = POOL_NAME_MAP[pool_key]
+    for pool_key, pool_name in POOL_NAME_MAP.items():
         index, _, embeddings = build_scenario_index(pool_name, reranker_model)
         scenario_indexes[pool_key] = index
         scenario_embeddings_map[pool_key] = embeddings
 
-    for method in args.methods:
-        for pool_key in args.pool_types:
-            scenario_index = scenario_indexes[pool_key]
-            scenario_embeddings = scenario_embeddings_map[pool_key]
-            outputs = []
-            for item, query_dict in zip(data, queries):
-                query_text = query_dict["full"]
-                if not query_text:
-                    continue
+    _RESOURCE_CACHE.update(
+        {
+            "reranker_model": reranker_model,
+            "domain_index": domain_index,
+            "role_index": role_index,
+            "domain_to_ids": domain_to_ids,
+            "role_to_ids": role_to_ids,
+            "domain_role_to_ids": domain_role_to_ids,
+            "scenario_indexes": scenario_indexes,
+            "scenario_embeddings_map": scenario_embeddings_map,
+        }
+    )
 
-                def fetch(q: str) -> List[Tuple[str, float]]:
-                    if method == "naive":
-                        return run_naive(q, scenario_index, args.topk)
-                    if method == "hier_domain":
-                        return run_hier_domain(
-                            q,
-                            scenario_index,
-                            domain_index,
-                            domain_to_ids,
-                            args.topk,
-                            args.domain_top_n,
-                        )
-                    if method == "hier_role":
-                        return run_hier_role(
-                            q,
-                            scenario_index,
-                            role_index,
-                            role_to_ids,
-                            args.topk,
-                            args.role_top_n,
-                        )
-                    if method == "hier_domain_role":
-                        return run_hier_domain_role(
-                            q,
-                            scenario_index,
-                            domain_index,
-                            role_index,
-                            domain_role_to_ids,
-                            args.topk,
-                            args.domain_top_n,
-                            args.role_top_n,
-                        )
-                    raise ValueError(f"Unknown method: {method}")
-
-                candidate_pairs = fetch(query_text)
-                if method == "naive":
-                    candidate_pairs = candidate_pairs[
-                        : max(args.topk * CANDIDATE_MULTIPLIER, args.topk)
-                    ]
-
-                bm25_top_score = (
-                    candidate_pairs[0][1] if candidate_pairs else float("-inf")
-                )
-
-                pred_pairs = rerank_candidates(
-                    query_text,
-                    candidate_pairs,
-                    reranker_model,
-                    scenario_embeddings,
-                    args.topk,
-                )
-
-                preds = [doc_id for doc_id, _ in pred_pairs]
-
-                if bm25_top_score < args.score_threshold:
-                    preds = []
-
-                enriched = dict(item)
-                ensure_answer_type_key(enriched)
-                enriched["prediction"] = preds
-                for i in range(1, args.topk + 1):
-                    enriched[f"prediction_top{i}"] = preds[:i]
-                outputs.append(enriched)
-
-            output_path = (
-                output_dir
-                / f"{method}_{pool_key}_top{args.topk}_domain{args.domain_top_n}_role{args.role_top_n}.jsonl"
-            )
-            save_jsonl(outputs, str(output_path))
+    return _RESOURCE_CACHE
 
 
-if __name__ == "__main__":
-    main()
+def _validate_method(method: str) -> str:
+    if method not in METHODS:
+        raise ValueError(f"Unsupported method '{method}'. Valid options: {METHODS}")
+    return method
+
+
+def _validate_pool(pool_type: str) -> str:
+    if pool_type not in POOL_NAME_MAP:
+        raise ValueError(
+            f"Unsupported pool type '{pool_type}'. Valid options: {list(POOL_NAME_MAP.keys())}"
+        )
+    return pool_type
+
+
+def _prepare_query(
+    dialogue: Sequence[Dict[str, str]],
+    query_variant: str,
+    last_turns: int,
+) -> Tuple[str, str]:
+    normalized = normalize_variant(query_variant)
+    queries = compose_query(dialogue, [normalized], max_turns=last_turns)
+    return normalized, queries.get(normalized, "")
+
+
+def _fetch_candidates(
+    method: str,
+    query: str,
+    topk: int,
+    *,
+    scenario_index: BM25Index,
+    domain_index: BM25Index,
+    role_index: BM25Index,
+    domain_to_ids: Dict[str, List[str]],
+    role_to_ids: Dict[str, List[str]],
+    domain_role_to_ids: Dict[str, Dict[str, List[str]]],
+    domain_top_n: int,
+    role_top_n: int,
+) -> List[Tuple[str, float]]:
+    if method == "naive":
+        return run_naive(query, scenario_index, topk)
+    if method == "hier_domain":
+        return run_hier_domain(
+            query,
+            scenario_index,
+            domain_index,
+            domain_to_ids,
+            topk,
+            domain_top_n,
+        )
+    if method == "hier_role":
+        return run_hier_role(
+            query,
+            scenario_index,
+            role_index,
+            role_to_ids,
+            topk,
+            role_top_n,
+        )
+    if method == "hier_domain_role":
+        return run_hier_domain_role(
+            query,
+            scenario_index,
+            domain_index,
+            role_index,
+            domain_role_to_ids,
+            topk,
+            domain_top_n,
+            role_top_n,
+        )
+    raise ValueError(f"Unknown method '{method}'")
+
+
+def retrieve_workflows(
+    dialogue: Sequence[Dict[str, str]],
+    topk: int,
+    *,
+    query_variant: str = DEFAULT_QUERY_VARIANT,
+    method: str = DEFAULT_METHOD,
+    pool_type: str = DEFAULT_POOL_TYPE,
+    domain_top_n: int = 3,
+    role_top_n: int = 3,
+    last_turns: int = 3,
+) -> List[str]:
+    """Return top-k workflow UUIDs for the provided dialogue.
+
+    Args:
+        dialogue: Conversation history (list of message dicts with ``role`` and
+            ``content`` keys).
+        topk: Number of predictions to return.
+        query_variant: Which dialogue window to use (``full``, ``last1``, ``last2``,
+            ``last3``)。
+        method: Retrieval strategy (``naive``, ``hier_domain``, ``hier_role``,
+            ``hier_domain_role``).
+        pool_type: Scenario pool to search (``summary``, ``text``, ``code``,
+            ``flowchart``).
+        domain_top_n: Number of domains to keep for hierarchical retrieval.
+        role_top_n: Number of roles to keep for hierarchical retrieval.
+        last_turns: Maximum number of user turns considered when ``query_variant``
+            是 ``lastN``。
+
+    Returns:
+        List of workflow UUID strings ordered by relevance.
+    """
+
+    if not dialogue:
+        return []
+
+    method = _validate_method(method)
+    pool_type = _validate_pool(pool_type)
+
+    resources = _ensure_resources()
+
+    _, query_text = _prepare_query(dialogue, query_variant, last_turns)
+    if not query_text:
+        return []
+
+    scenario_index: BM25Index = resources["scenario_indexes"][pool_type]
+    scenario_embeddings: Dict[str, torch.Tensor] = resources["scenario_embeddings_map"][
+        pool_type
+    ]
+    domain_index: BM25Index = resources["domain_index"]
+    role_index: BM25Index = resources["role_index"]
+    domain_to_ids: Dict[str, List[str]] = resources["domain_to_ids"]
+    role_to_ids: Dict[str, List[str]] = resources["role_to_ids"]
+    domain_role_to_ids: Dict[str, Dict[str, List[str]]] = resources[
+        "domain_role_to_ids"
+    ]
+    reranker_model = resources["reranker_model"]
+
+    candidate_pairs = _fetch_candidates(
+        method,
+        query_text,
+        topk,
+        scenario_index=scenario_index,
+        domain_index=domain_index,
+        role_index=role_index,
+        domain_to_ids=domain_to_ids,
+        role_to_ids=role_to_ids,
+        domain_role_to_ids=domain_role_to_ids,
+        domain_top_n=domain_top_n,
+        role_top_n=role_top_n,
+    )
+
+    if method == "naive":
+        candidate_pairs = candidate_pairs[: max(topk * CANDIDATE_MULTIPLIER, topk)]
+
+    if not candidate_pairs:
+        return []
+
+    query_embedding = None
+    if reranker_model is not None:
+        query_embedding = reranker_model.encode(
+            query_text, convert_to_tensor=True, normalize_embeddings=True
+        )
+
+    reranked = rerank_candidates(
+        query_text,
+        candidate_pairs,
+        reranker_model,
+        scenario_embeddings,
+        topk,
+        query_embedding=query_embedding,
+    )
+
+    return [doc_id for doc_id, _ in reranked]
+
+
+__all__ = ["retrieve_workflows"]
