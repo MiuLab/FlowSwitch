@@ -357,7 +357,7 @@ def run_evaluation_and_summary(output_dir, methods, pool_types):
                                 correct_samples = 0
                                 
                                 for result in eval_data[topk_key]:
-                                    answer_type = result['answer_type']
+                                    answer_type = result.get('answer_type', result.get('answer type'))
                                     accuracy = result['accuracy']
                                     count = result.get('count', 0)
                                     
@@ -480,7 +480,7 @@ def run_hierarchical_experiments(args):
                         
                     messages = item.get('messages', [])
                     ground_truth = item.get('answer', [])
-                    answer_type = item.get('answer_type', 'SINGLE')
+                    answer_type = item.get('answer_type', item.get('answer type', 'SINGLE'))
 
                     query = retriever.format_messages_to_query(messages, args.last_n_turns)
                     
@@ -495,7 +495,7 @@ def run_hierarchical_experiments(args):
                         'turn_id': turn_id,
                         'messages': messages,
                         'answer': ground_truth,
-                        'answer_type': answer_type,
+                        'answer type': answer_type,
                         'prediction_top1': predictions[:1] if predictions else [],
                         'prediction_top2': predictions[:2] if predictions else [],
                         'prediction_top3': predictions[:3] if predictions else [],
