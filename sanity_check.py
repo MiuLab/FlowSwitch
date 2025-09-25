@@ -1,12 +1,14 @@
 import jsonlines
 
 turn_data = []
-with jsonlines.open("./data/turn_level_data_final.jsonl") as reader:
+with jsonlines.open("./data/turn_level_data_final_w_last_workflow.jsonl") as reader:
     for obj in reader:
         turn_data.append(obj)
 
 print(f"total number of turns: {len(turn_data)}")
 for turn in turn_data:
+    if "answer_type" not in turn:
+        raise ValueError("turn does not have answer_type")
     if turn["answer_type"] == "UNK":
         assert turn["answer"] == ["Out of scope"]
     if turn["answer_type"] == "SINGLE":

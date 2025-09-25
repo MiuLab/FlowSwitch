@@ -9,6 +9,7 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.llms.callbacks import llm_completion_callback
 from llama_index.core.base.llms.types import CompletionResponse
 from openai import OpenAI
+from loguru import logger
 
 DEFAULT_BASE_URL = "http://qwen.morris-chang.rocks/v1/completions"
 DEFAULT_API_KEY = "EMPTY"
@@ -103,6 +104,7 @@ def request_llm_vllm_chat(
     api_url: str | None = None,
     streamming: bool = False,
     enable_thinking: bool = False,
+    retry: int = 10,
     **kwargs: Any,
 ) -> str:
     """Send a chat completion request and return the response text."""
@@ -123,4 +125,19 @@ def request_llm_vllm_chat(
     if streamming:
         return [x for x in client.stream_chat(chat_history)][-1]
     else:
-        return client.chat(chat_history, **kwargs)
+        try:
+            return client.chat(chat_history, **kwargs)
+        except Exception as e:
+            logger.error(f"Error while requesting chat completion: {e}")
+            if retry > 0:
+                return request_llm_vllm_chat(
+                    messages,
+                    model,
+                    api_url=api_url,
+                    streamming=streamming,
+                    enable_thinking=enable_thinking,
+                    retry=retry - 1,
+                    **kwargs,
+                )
+            else:
+                return "Error: Failed to request chat completion after retrying."
