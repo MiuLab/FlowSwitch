@@ -1,7 +1,7 @@
 import os
 import json
 import jsonlines
-import tqdm
+from tqdm import tqdm
 
 MAPPING = {
     "Customer Service": {
@@ -117,7 +117,7 @@ def save_jsonl(data, filename):
 def save_json(data, filename):
     """Save a json file"""
     with open(filename, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
 
 
 def load_pool(pool_name: str):
@@ -154,7 +154,7 @@ def load_bm25_retriever(pool_name: str):
 
     pool = load_pool(pool_name)
     corpus = list(pool.values())
-    tokenized_corpus = [doc.split(" ") for doc in corpus]
+    tokenized_corpus = [doc["workflow"].split(" ") for doc in corpus]
     return BM25Okapi(tokenized_corpus)
 
 
@@ -314,13 +314,17 @@ def request_openai(prompt, model="gpt-4.1"):
 
 def evaluate(input_file, output_file, topk=5):
     """Evaluate the predicted workflows"""
-    input_data = load_jsonl(input_file)
+    try:
+        input_data = load_jsonl(input_file)
+    except:
+        input_data = input_file
+        pass
     output_data = []
     # categorize input into different answer type
     data = {"AND": [], "OR": [], "SINGLE": [], "UNK": []}
 
     for item in tqdm(input_data):
-        answer_type = item["answer type"]
+        answer_type = item["answer_type"]
         if answer_type == "AND":
             data["AND"].append(item)
         elif answer_type == "OR":
@@ -356,6 +360,7 @@ def evaluate(input_file, output_file, topk=5):
         output_data["top" + str(k)].append(
             {"answer type": "overall", "accuracy": overall_accuracy}
         )
+    output_data["map"] = evaluate_map(input_data)
     save_json(output_data, output_file)
 
 
@@ -375,3 +380,28 @@ def calculate_accuracy(gt, pred, answer_type):
         return len(set(gt).intersection(set(pred))) == len(set(gt))
     else:
         return len(pred) == 0
+
+def evaluate_map(inputs, topk=5):
+    """Evaluate the predicted workflows' MAP"""
+    maps = []
+    for item in tqdm(inputs):
+    # calculate MAP
+        gt = item["answer"]
+        if item["answer_type"] == "UNK":
+            continue
+        pred = item["prediction_top" + str(topk)]
+        map = calculate_map(gt, pred)
+        maps.append(map)
+    return sum(maps) / len(maps)
+
+def calculate_map(gt, pred):
+    precision = 0
+    cnt = 0
+    for i in range(len(pred)):
+        if pred[i] in gt:
+            cnt += 1
+            precision += cnt / (i + 1)
+    if cnt == 0:
+        return 0
+    return precision / cnt
+

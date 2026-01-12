@@ -21,14 +21,15 @@ from utils import load_pool, load_bm25_retriever, load_reranker, MAPPING, evalua
 from request_qwen import request_qwen_chat
 import numpy as np
 import logging
+from loguru import logger
 import argparse
 import pandas as pd
 import glob
 from tqdm import tqdm
 from datetime import datetime
 from rank_bm25 import BM25Okapi
-
-logger = logging.getLogger(__name__)
+from request_llm import request_llm_vllm_chat, arequest_llm_vllm_chat
+# logger = logging.getLogger(__name__)
 
 
 class HierarchicalRetriever:
@@ -71,6 +72,69 @@ class HierarchicalRetriever:
             if role in MAPPING[domain]:
                 return MAPPING[domain][role]
         return []
+
+    async def _allm_select_from_candidates(self, query: str, candidates: List[str], 
+                                   candidate_descriptions: Dict[str, str], 
+                                   selection_type: str, top_k: int = 3) -> List[str]:
+
+        candidate_info = []
+        for candidate in candidates:
+            desc = candidate_descriptions.get(candidate, "No description available")
+            candidate_info.append(f"- {candidate}: {desc}")
+        
+        candidate_text = "\n".join(candidate_info)
+        
+        prompt = f"""Given the user query/dialogue history, please select the most relevant {selection_type}s from the candidates below.
+
+User Query/Dialogue History:
+{query}
+
+Available {selection_type.capitalize()}s:
+{candidate_text}
+
+Please analyze the user's intent and select the top {top_k} most relevant {selection_type}s that best match the user's needs.
+Return only the names of the selected {selection_type}s, one per line, in order of relevance (most relevant first).
+
+Selected {selection_type}s:"""
+
+        try:
+            enable_thinking = False
+            response = await request_qwen_chat(
+                messages=[{"role": "user", "content": prompt}],
+                model="Qwen/Qwen3-8B",
+                temperature=0.1,
+                enable_thinking=enable_thinking
+            )
+            # response = await arequest_llm_vllm_chat(
+            #     messages=[{"role": "user", "content": prompt}],
+            #     model="Qwen/Qwen3-8B",
+            #     temperature=0.1
+            # )
+                
+            response = response["response"]["message"]["content"].split("assistant:")[-1].strip().replace("<think>", "").replace("</think>", "").strip()
+            logger.info(f"LLM selection: {response}")
+            # selected_text = response.get("response", "").strip()
+            selected_text = response
+            selected_lines = [line.strip().lstrip('- ') for line in selected_text.split('\n') if line.strip()]
+            
+            # Filter to only include valid candidates
+            selected = []
+            for line in selected_lines:
+                if line in candidates:
+                    selected.append(line)
+                    if len(selected) >= top_k:
+                        break
+            
+            # If no valid selections, fallback to first few candidates
+            if not selected:
+                selected = candidates[:top_k]
+                
+            return selected
+            
+        except Exception as e:
+            logger.error(f"LLM selection failed for {selection_type}: {e}")
+            # Fallback to first few candidates
+            return candidates[:top_k]
     
     def _llm_select_from_candidates(self, query: str, candidates: List[str], 
                                    candidate_descriptions: Dict[str, str], 
@@ -97,12 +161,17 @@ Return only the names of the selected {selection_type}s, one per line, in order 
 Selected {selection_type}s:"""
 
         try:
-            response = request_qwen_chat(
+            # response = request_qwen_chat(
+            #     messages=[{"role": "user", "content": prompt}],
+            #     model="qwen3-8b",
+            #     temperature=0.1
+            # )
+            response = request_llm_vllm_chat(
                 messages=[{"role": "user", "content": prompt}],
-                model="qwen3-8b",
+                model="Qwen/Qwen3-8B",
                 temperature=0.1
             )
-            
+                
             selected_text = response.get("response", "").strip()
             selected_lines = [line.strip().lstrip('- ') for line in selected_text.split('\n') if line.strip()]
             
@@ -121,7 +190,7 @@ Selected {selection_type}s:"""
             return selected
             
         except Exception as e:
-            logger.info(f"LLM selection failed for {selection_type}: {e}")
+            logger.error(f"LLM selection failed for {selection_type}: {e}")
             # Fallback to first few candidates
             return candidates[:top_k]
     
@@ -164,7 +233,7 @@ Selected {selection_type}s:"""
                 final_indices = [rerank_candidates[i] for i in rerank_indices]
                 
             except Exception as e:
-                logger.info(f"Reranking failed: {e}")
+                logger.error(f"Reranking failed: {e}")
                 final_indices = ranked_indices
         else:
             final_indices = ranked_indices
@@ -176,12 +245,12 @@ Selected {selection_type}s:"""
         
         return result_uuids
     
-    def retrieve_2layer_domain_scenario(self, query: str, top_k: int = 5) -> List[str]:
+    async def retrieve_2layer_domain_scenario(self, query: str, top_k: int = 5) -> List[str]:
 
         logger.info("Starting 2-layer Domain→Scenario retrieval...")
         
         all_domains = list(self.domain_desc.keys())
-        selected_domains = self._llm_select_from_candidates(
+        selected_domains = await self._allm_select_from_candidates(
             query=query,
             candidates=all_domains,
             candidate_descriptions=self.domain_desc,
@@ -213,12 +282,12 @@ Selected {selection_type}s:"""
         
         return final_results
     
-    def retrieve_2layer_role_scenario(self, query: str, top_k: int = 5) -> List[str]:
+    async def retrieve_2layer_role_scenario(self, query: str, top_k: int = 5) -> List[str]:
 
         logger.info("Starting 2-layer Role→Scenario retrieval...")
         
         all_roles = list(self.role_desc.keys())
-        selected_roles = self._llm_select_from_candidates(
+        selected_roles = await self._allm_select_from_candidates(
             query=query,
             candidates=all_roles,
             candidate_descriptions=self.role_desc,
@@ -250,11 +319,11 @@ Selected {selection_type}s:"""
         
         return final_results
     
-    def retrieve_3layer_domain_role_scenario(self, query: str, top_k: int = 5) -> List[str]:
+    async def retrieve_3layer_domain_role_scenario(self, query: str, top_k: int = 5) -> List[str]:
         logger.info("Starting 3-layer Domain→Role→Scenario retrieval...")
 
         all_domains = list(self.domain_desc.keys())
-        selected_domains = self._llm_select_from_candidates(
+        selected_domains = await self._allm_select_from_candidates(
             query=query,
             candidates=all_domains,
             candidate_descriptions=self.domain_desc,
@@ -277,7 +346,7 @@ Selected {selection_type}s:"""
 
         candidate_role_desc = {role: self.role_desc[role] for role in candidate_roles if role in self.role_desc}
         
-        selected_roles = self._llm_select_from_candidates(
+        selected_roles = await self._allm_select_from_candidates(
             query=query,
             candidates=candidate_roles,
             candidate_descriptions=candidate_role_desc,

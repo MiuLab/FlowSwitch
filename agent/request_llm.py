@@ -1,7 +1,8 @@
 import os
 import json
 import requests
-from typing import Any, Dict, List
+import requests_async as arequests
+from typing import Any, Dict, List, Coroutine
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 from llama_index.llms.vllm import VllmServer
@@ -23,6 +24,13 @@ def custom_post_http_request(
     sampling_params["stream"] = stream
     return requests.post(api_url, headers=headers, json=sampling_params, stream=True)
 
+async def acustom_post_http_request(
+    api_url: str, sampling_params: dict = {}, stream: bool = False
+) -> Coroutine[Any, Any, requests.Response]:
+    # headers = {"User-Agent": "Test Client"}
+    headers = {"Content-Type": "application/json"}
+    sampling_params["stream"] = stream
+    return await arequests.post(api_url, headers=headers, json=sampling_params, stream=True)
 
 def custom_get_response(response: requests.Response) -> List[str]:
     data = json.loads(response.content)
@@ -58,6 +66,20 @@ class CustomVllmServer(VllmServer):
         sampling_params = dict(**params)
         sampling_params["prompt"] = prompt
         response = custom_post_http_request(self.api_url, sampling_params, stream=False)
+        output = custom_get_response(response)
+
+        return CompletionResponse(text=output)
+    @llm_completion_callback()
+    async def acomplete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        kwargs = kwargs if kwargs else {}
+        params = {**self._model_kwargs, **kwargs}
+
+        # build sampling parameters
+        sampling_params = dict(**params)
+        sampling_params["prompt"] = prompt
+        response = await acustom_post_http_request(self.api_url, sampling_params, stream=False)
         output = custom_get_response(response)
 
         return CompletionResponse(text=output)
@@ -104,7 +126,7 @@ def request_llm_vllm_chat(
     api_url: str | None = None,
     streamming: bool = False,
     enable_thinking: bool = False,
-    retry: int = 10,
+    retry: int = 20,
     **kwargs: Any,
 ) -> str:
     """Send a chat completion request and return the response text."""
@@ -131,6 +153,50 @@ def request_llm_vllm_chat(
             logger.error(f"Error while requesting chat completion: {e}")
             if retry > 0:
                 return request_llm_vllm_chat(
+                    messages,
+                    model,
+                    api_url=api_url,
+                    streamming=streamming,
+                    enable_thinking=enable_thinking,
+                    retry=retry - 1,
+                    **kwargs,
+                )
+            else:
+                return "Error: Failed to request chat completion after retrying."
+async def arequest_llm_vllm_chat(
+    messages: Sequence[Mapping[str, str]],
+    model: str = "Qwen/Qwen3-14B",
+    *,
+    api_url: str | None = None,
+    streamming: bool = False,
+    enable_thinking: bool = False,
+    retry: int = 20,
+    **kwargs: Any,
+) -> str:
+    """Send a chat completion request and return the response text."""
+    if not messages:
+        raise ValueError("messages must contain at least one item.")
+
+    client = _get_vllm_client(
+        api_url or os.getenv("VLLM_BASE_URL", DEFAULT_BASE_URL),
+    )
+    chat_history = []
+    for message in messages:
+        chat_history.append(
+            ChatMessage(role=message["role"], content=message["content"])
+        )
+    if not enable_thinking:
+        chat_history[-1].content += " /no_think"
+
+    if streamming:
+        return [x for x in client.astream_chat(chat_history)][-1]
+    else:
+        try:
+            return await client.achat(chat_history, **kwargs)
+        except Exception as e:
+            logger.error(f"Error while requesting chat completion: {e}")
+            if retry > 0:
+                return await arequest_llm_vllm_chat(
                     messages,
                     model,
                     api_url=api_url,
