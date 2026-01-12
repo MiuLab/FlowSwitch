@@ -1,4 +1,3 @@
-export OPENROUTER_API_KEY=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
 python ./agent/workflow_agent.py \
     --input_path ./data/turn_level_data_final_w_last_workflow.jsonl \
     --workflows_path ./pools/workflow_text.json \
